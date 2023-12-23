@@ -1,0 +1,19 @@
+CONTRIBUTIONS:
+
+cpu.v:
+Partner 1 and Partner 2 both worked on the ControllerFSM module to create new states for the branch instructions.
+New states that were created were made to help the timing of each instruction to execute what is needed. Both partners
+chose to get rid of state UpdatePC and IF2 to reduce the time for the code to execute. To implement table 1 of the lab, 
+we changed the mux for the PC to update the PC values accordingly. We changed the datapath PC value to the lab7 version + 1
+as we get the value for R7 by just adding one to the original PC. We then instantiated this change acccordingly. 
+The most challenging obstacle was to figure out how to time the changes of the PC and when  to set load_pc to 1. We 
+had to refer to the timing diagram provided in lab 7 many times in order to ensure we were doing everything correctly. This 
+was especially hard since we removed the IF2 and Update PC states
+
+Testing:
+Both partners put in extensive effort to analyze the waveforms and deduce any issues with the existing code. Upon making 
+the necessary changes, our designs were able to pass autograder, the stage 2 testbench, as well as some modified versions 
+of the stage2 testbench.
+
+lab8_top.v:
+Both partners worked together to make the minor modifications to the top_module in order to make it compatible with the 50 MHz clock
