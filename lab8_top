@@ -1,0 +1,148 @@
+`define MWRITE 2'b10
+`define MREAD 2'b01
+`define MNONE 2'b00
+
+module lab8_top(KEY, SW, LEDR, HEX0, HEX1, HEX2, HEX3, HEX4, HEX5, CLOCK_50);
+    input [3:0] KEY;
+    input [9:0] SW;
+    input CLOCK_50;
+    output [9:0] LEDR;
+    output [6:0] HEX0, HEX1, HEX2, HEX3, HEX4, HEX5;
+    
+
+    wire write, N, V, Z, led_load;
+    wire [15:0] din, dout;
+    wire [1:0] mem_cmd;
+    wire [15:0] read_data, write_data, inter_dout;
+    wire [8:0] mem_addr;
+
+	//AND gate to allow for writing into memory
+    assign write = ((mem_cmd == `MWRITE)&&(mem_addr[8]==1'b0))?1'b1:1'b0;
+    //tri state buffer that drives read_data with the intermediate dout if both the memory command is READ and the address is valid
+    assign read_data = ((mem_cmd == `MREAD)&&(mem_addr[8]==1'b0)) ? inter_dout : {16{1'bz}};
+
+    //tri state buffer that drives read_data with the slider switches if both the memory command is READ and the address 9'h140
+    assign read_data = ((mem_addr == 9'h140)&&(mem_cmd == `MREAD)) ? {8'h00, SW[7:0]} : {16{1'bz}};
+
+    //tri state buffer that drives the load of the LED register to 1 if both the memory command is WRITE and the address is 9'h100
+    assign led_load = ((mem_addr == 9'h100)&&(mem_cmd == `MWRITE)) ? 1'b1 : 1'b0 ;
+
+    //KEY0 serves as the clock, write and read address both take memory address' bits 7 to 0, output 
+    //to the intermediate dout to allow for evaluation by the tri-state buffer
+
+    LEDRegister #(8) LED(CLOCK_50, write_data[7:0], LEDR[7:0], led_load);
+
+    cpu CPU(CLOCK_50, ~KEY[1], read_data, write_data, N, V, Z, mem_addr, mem_cmd, LEDR[8]);
+    
+    RMMemory #(16, 8, "data.txt") MEM(CLOCK_50, mem_addr[7:0], mem_addr[7:0], write, write_data, inter_dout);
+
+
+    //according to lab6_top
+    assign HEX5[0] = ~Z;
+    assign HEX5[6] = ~N;
+    assign HEX5[3] = ~V;
+    // fill in sseg to display 4-bits in hexidecimal 0,1,2...9,A,B,C,D,E,F
+    sseg H0(write_data[3:0],   HEX0);
+    sseg H1(write_data[7:4],   HEX1);
+    sseg H2(write_data[11:8],  HEX2);
+    sseg H3(write_data[15:12], HEX3);
+    assign HEX4 = 7'b1111111;
+    assign {HEX5[2:1],HEX5[5:4]} = 4'b1111; // disabled
+endmodule
+
+
+module RMMemory (clk, write_address, read_address, write, din, dout);
+    parameter data;
+    parameter address;
+    parameter filename;
+
+    input clk; 
+    input [address-1:0] write_address, read_address;
+    input write;
+    input [data-1:0] din;
+    output [data-1:0] dout;
+    reg [data-1:0] dout;
+
+    reg [data-1:0] mem[2**address-1:0];
+    //initialize memory
+    initial $readmemb(filename, mem);
+
+    //at the rising edge of clk, if write is true or given a value of 1, we write the value of din into 
+    // the mem[write_address], dout will be given a value a cycle later
+    always @ (posedge clk) begin
+        if(write)
+            mem[write_address] <= din;
+        
+        dout <= mem[read_address];
+    end
+
+endmodule      
+
+module sseg(in,segs);
+  input [3:0] in;
+  output [6:0] segs;
+
+   reg [6:0] temp_out;
+
+  `define Zero 7'b1000000
+  `define One 7'b1111001
+  `define Two 7'b0100100
+  `define Three 7'b0110000
+  `define Four 7'b0011001
+  `define Five 7'b0010010
+  `define Six 7'b0000010
+  `define Seven 7'b1111000
+  `define Eight 7'b0000000
+  `define Nine 7'b0011000
+  `define A 7'b0001000
+  `define b 7'b0000011
+  `define C 7'b1000110
+  `define D 7'b0100001
+  `define E 7'b0000110
+  `define F 7'b0001110
+  
+  always@(in) begin
+	case(in)
+	
+	4'b0000: temp_out = `Zero ;
+	4'b0001: temp_out = `One ;
+	4'b0010: temp_out = `Two ;
+	4'b0011: temp_out = `Three ;
+	4'b0100: temp_out = `Four ;
+	4'b0101: temp_out = `Five ;
+	4'b0110: temp_out = `Six ;
+	4'b0111: temp_out = `Seven ;
+	4'b1000: temp_out = `Eight ;
+	4'b1001: temp_out = `Nine ;
+	4'b1010: temp_out = `A	;
+	4'b1011: temp_out = `b ;
+	4'b1100: temp_out = `C ;
+	4'b1101: temp_out = `D ;
+	4'b1110: temp_out = `E ;
+	4'b1111: temp_out = `F ;
+	
+	default : temp_out = 7'bxxxxxxx;
+	
+	endcase
+	
+	end
+  
+  assign segs = temp_out; 
+
+endmodule
+
+//load enabled register that updates the instruction to the decoder on the rising edge of clk
+module LEDRegister(clk, in, out, load);
+  parameter n;
+  input clk;
+  input [n-1:0] in;
+  input load ;
+  output [n-1:0] out;
+  reg [n-1:0] temp_out;
+
+  always @(posedge clk)begin
+	//assign in to temp_out when load is 1'b1
+	temp_out <= (load == 1'b1)? in : out ;
+  end
+  assign out = temp_out ;
+endmodule
